@@ -20,4 +20,9 @@ const (
 	// timeoutKey is the configuration field name for controlling
 	// the maximum duration of a resolution request for a file from http.
 	timeoutKey = "fetch-timeout"
+
+	// maxResponseBodySize is the maximum response body size the HTTP resolver
+	// will read. Hardcoded to 1 MiB to stay below the etcd object size limit
+	// while leaving room for ResolutionRequest CRD wrapping and base64 overhead.
+	maxResponseBodySize = 1024 * 1024 // 1 MiB
 )

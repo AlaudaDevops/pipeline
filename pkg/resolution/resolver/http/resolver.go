@@ -248,9 +248,13 @@ func (r *Resolver) fetchHttpResource(ctx context.Context, params map[string]stri
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	body, err := io.ReadAll(resp.Body)
+	lr := &io.LimitedReader{R: resp.Body, N: maxResponseBodySize + 1}
+	body, err := io.ReadAll(lr)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+	if lr.N <= 0 {
+		return nil, fmt.Errorf("response body exceeds maximum allowed size of %d bytes", int64(maxResponseBodySize))
 	}
 
 	return &resolvedHttpResource{
