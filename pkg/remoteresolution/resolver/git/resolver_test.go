@@ -101,6 +101,10 @@ func TestValidateParams(t *testing.T) {
 			},
 		},
 		{
+			// v0.65.x keeps local filesystem paths as a valid URL form for
+			// backward compatibility — upstream's broader URL-scheme tightening
+			// is not adopted here; the revision-injection defense (rejecting
+			// revision values beginning with "-") is what closes CVE-2026-40938.
 			name: "git url from a local repository",
 			params: map[string]string{
 				gitresolution.UrlParam:      "/tmp/repo",
@@ -112,6 +116,30 @@ func TestValidateParams(t *testing.T) {
 			name: "git url from a git ssh repository",
 			params: map[string]string{
 				gitresolution.UrlParam:      "git@host.com:foo/bar",
+				gitresolution.PathParam:     "bar",
+				gitresolution.RevisionParam: "baz",
+			},
+		},
+		{
+			name: "git url from an ssh:// repository",
+			params: map[string]string{
+				gitresolution.UrlParam:      "ssh://git@host.com/foo/bar",
+				gitresolution.PathParam:     "bar",
+				gitresolution.RevisionParam: "baz",
+			},
+		},
+		{
+			name: "git url from an ftp repository",
+			params: map[string]string{
+				gitresolution.UrlParam:      "ftp://host.com/foo/bar",
+				gitresolution.PathParam:     "bar",
+				gitresolution.RevisionParam: "baz",
+			},
+		},
+		{
+			name: "git url from an ftps repository",
+			params: map[string]string{
+				gitresolution.UrlParam:      "ftps://host.com/foo/bar",
 				gitresolution.PathParam:     "bar",
 				gitresolution.RevisionParam: "baz",
 			},
@@ -317,6 +345,11 @@ func TestResolve(t *testing.T) {
 	}}
 
 	anonFakeRepoURL, commitSHAsInAnonRepo := createTestRepo(t, commits)
+
+	// Clone integration tests use local filesystem paths which are
+	// rejected by validateRepoURL in production. Override the validator
+	// for the duration of this test so the clone path can be exercised.
+	t.Cleanup(gitresolution.SetValidateRepoURLForTesting(func(_ string) bool { return true }))
 
 	// local repo set up for scm cloning
 	// ----

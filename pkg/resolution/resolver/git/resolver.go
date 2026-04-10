@@ -150,11 +150,27 @@ func ValidateParams(ctx context.Context, params []pipelinev1.Param) error {
 
 // validateRepoURL validates if the given URL is a valid git, http, https URL or
 // starting with a / (a local repository).
-func validateRepoURL(url string) bool {
-	// Explanation:
-	pattern := `^(/|[^@]+@[^:]+|(git|https?)://)`
+//
+// Declared as a variable so integration tests can temporarily override it
+// (e.g. to allow local filesystem paths) via SetValidateRepoURLForTesting.
+var validateRepoURL = defaultValidateRepoURL
+
+func defaultValidateRepoURL(url string) bool {
+	// Accepts local filesystem paths ("/..."), SSH-style remotes
+	// (user@host:path), and common URL schemes (git://, ssh://, ftp://,
+	// ftps://, http://, https://).
+	pattern := `^(/|[^@]+@[^:]+|(git|ssh|ftps?|https?)://)`
 	re := regexp.MustCompile(pattern)
 	return re.MatchString(url)
+}
+
+// SetValidateRepoURLForTesting swaps the validateRepoURL implementation and
+// returns a function that restores the original. Test-only helper; must be
+// scheduled with t.Cleanup. Do not depend on this in production code.
+func SetValidateRepoURLForTesting(fn func(string) bool) func() {
+	orig := validateRepoURL
+	validateRepoURL = fn
+	return func() { validateRepoURL = orig }
 }
 
 func ResolveAnonymousGit(ctx context.Context, params map[string]string) (framework.ResolvedResource, error) {
@@ -313,6 +329,15 @@ func PopulateDefaultParams(ctx context.Context, params []pipelinev1.Param) (map[
 	}
 	if len(missingParams) > 0 {
 		return nil, fmt.Errorf("missing required git resolver params: %s", strings.Join(missingParams, ", "))
+	}
+
+	// Reject revision values that begin with "-" to prevent git argument
+	// injection (e.g. "--upload-pack=/path/to/binary"). Even when go-git is
+	// used instead of shelling out, a revision value that looks like a flag
+	// can produce surprising refspec parsing — rejecting it here is a
+	// defense-in-depth check that matches upstream CVE-2026-40938.
+	if strings.HasPrefix(paramsMap[RevisionParam], "-") {
+		return nil, fmt.Errorf("invalid revision %q: must not begin with '-'", paramsMap[RevisionParam])
 	}
 
 	// validate the url params if we are not using the SCM API
