@@ -596,6 +596,31 @@ func TestResolve(t *testing.T) {
 		apiToken:       "some-token",
 		expectedStatus: internal.CreateResolutionRequestFailureStatus(),
 		expectedErr:    createError("missing or empty scm-type value in configmap"),
+	}, {
+		// Regression test for CVE-2026-40161: when the user specifies a
+		// custom serverURL that differs from the system default and does
+		// not provide their own token, the request must be rejected so
+		// that the system-configured API token is not sent to a
+		// user-controlled server.
+		name: "api: user-controlled serverURL without user token is rejected",
+		args: &params{
+			revision:   "main",
+			pathInRepo: "tasks/example-task.yaml",
+			org:        testOrg,
+			repo:       testRepo,
+			scmType:    "fake",
+			serverURL:  "attacker.example.com",
+		},
+		config: map[string]string{
+			ServerURLKey:          "fake",
+			SCMTypeKey:            "fake",
+			APISecretNameKey:      "token-secret",
+			APISecretKeyKey:       "token",
+			APISecretNamespaceKey: system.Namespace(),
+		},
+		apiToken:       "some-token",
+		expectedStatus: internal.CreateResolutionRequestFailureStatus(),
+		expectedErr:    createError(`custom serverURL "attacker.example.com" requires a token parameter; the system token cannot be sent to a non-default server URL`),
 	}}
 
 	for _, tc := range testCases {

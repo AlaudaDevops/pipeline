@@ -170,6 +170,22 @@ func (r *Resolver) resolveAPIGit(ctx context.Context, params map[string]string) 
 	} else {
 		secretRef = nil
 	}
+
+	// Security (CVE-2026-40161): when the user did not provide their own
+	// token but did specify a custom serverURL that differs from the
+	// system-configured default, reject the request so the system API token
+	// is never sent to a user-controlled server.
+	if secretRef == nil {
+		if userServerURL, hasUserServerURL := params[serverURLParam]; hasUserServerURL && userServerURL != "" {
+			conf := framework.GetResolverConfigFromContext(ctx)
+			if defaultServerURL, ok := conf[ServerURLKey]; ok && userServerURL != defaultServerURL {
+				return nil, fmt.Errorf("custom %s %q requires a %s parameter; "+
+					"the system token cannot be sent to a non-default server URL",
+					serverURLParam, userServerURL, tokenParam)
+			}
+		}
+	}
+
 	apiToken, err := r.getAPIToken(ctx, secretRef)
 	if err != nil {
 		return nil, err
