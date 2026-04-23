@@ -196,6 +196,24 @@ func TestValidateParams_Failure(t *testing.T) {
 				repoParam:     "foo",
 			},
 			expectedErr: "'org' is required when 'repo' is specified",
+		}, {
+			// Regression test for CVE-2026-40938: a revision that starts
+			// with "-" must be rejected so it cannot be mistaken for a git flag.
+			name: "revision starts with dash (argument injection)",
+			params: map[string]string{
+				revisionParam: "--upload-pack=/bin/sh",
+				pathParam:     "foo/bar.yaml",
+				urlParam:      "https://github.com/tektoncd/catalog",
+			},
+			expectedErr: `invalid revision "--upload-pack=/bin/sh": must not begin with '-'`,
+		}, {
+			name: "revision starts with single dash",
+			params: map[string]string{
+				revisionParam: "-v",
+				pathParam:     "foo/bar.yaml",
+				urlParam:      "https://github.com/tektoncd/catalog",
+			},
+			expectedErr: `invalid revision "-v": must not begin with '-'`,
 		},
 	}
 

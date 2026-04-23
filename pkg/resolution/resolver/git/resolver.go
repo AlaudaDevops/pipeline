@@ -512,6 +512,15 @@ func populateDefaultParams(ctx context.Context, params []pipelinev1.Param) (map[
 		return nil, fmt.Errorf("missing required git resolver params: %s", strings.Join(missingParams, ", "))
 	}
 
+	// Reject revision values that begin with "-" to prevent git argument
+	// injection (e.g. "--upload-pack=/path/to/binary"). Even when the go-git
+	// library is used instead of shelling out to git, a revision value that
+	// looks like a flag can produce surprising refspec parsing — rejecting it
+	// here is a defense-in-depth check that matches upstream CVE-2026-40938.
+	if strings.HasPrefix(paramsMap[revisionParam], "-") {
+		return nil, fmt.Errorf("invalid revision %q: must not begin with '-'", paramsMap[revisionParam])
+	}
+
 	// validate the url params if we are not using the SCM API
 	if paramsMap[repoParam] == "" && paramsMap[orgParam] == "" && !validateRepoURL(paramsMap[urlParam]) {
 		return nil, fmt.Errorf("invalid git repository url: %s", paramsMap[urlParam])
